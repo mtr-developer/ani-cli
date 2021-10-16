@@ -24,6 +24,7 @@ help_text () {
 	 -h	 show this help text
 	 -d	 download episode
 	 -H	 continue where you left off
+	 -r <page> fetch recent releases
 	EOF
 }
 
@@ -61,6 +62,19 @@ search_eps () {
 		q
 		}
 		'
+}
+
+get_releases() {
+	# get anime name along with its id
+	search=$(printf '%s' "$1" | tr ' ' '-' )
+	titlepattern='<a href="/category/'
+
+	curl -s "https://gogoanime.vc/?page=$1" \
+		-G |
+	sed -n -E '
+		s_^[[:space:]]*<a href="/([^"]*)" title="([^"]*)".*_\1_p
+		' |
+	grep episode 
 }
 
 get_embedded_video_link() {
@@ -179,6 +193,7 @@ open_episode () {
 
 	# Cool effect way of clearing screen
 	printf '\x1B[2J\x1B[1;1H'
+	
 	if [ $episode -lt 1 ] || [ $episode -gt $last_ep_number ]; then
 		err "Episode out of range"
 		printf "${c_blue}Choose episode $c_cyan[1-%d]$c_reset:$c_green " $last_ep_number
@@ -237,7 +252,7 @@ dep_ch "$player_fn" "curl" "sed" "grep"
 # option parsing
 is_download=0
 scrape=query
-while getopts 'hdH' OPT; do
+while getopts 'hdHr:' OPT; do
 	case $OPT in
 		h)
 			help_text
@@ -248,6 +263,10 @@ while getopts 'hdH' OPT; do
 			;;
 		H)
 			scrape=history
+			;;
+		r)
+			scrape=releases
+			r=${OPTARG}
 			;;
 	esac
 done
@@ -270,6 +289,15 @@ case $scrape in
 		[ -z "$search_results" ] && die "History is empty"
 		anime_selection "$search_results"
 		ep_choice_start=$(sed -n -E "s/${selection_id}\t//p" "$logfile")
+		;;
+	releases)
+		page=$r
+		search_results=$(get_releases "$page")
+		[ -z "$search_results" ] && die "There was a problem fetching the releases"
+		anime_selection "$search_results"
+		ep_choice_start=$(echo ${selection_id} | sed -r 's/.*-episode-//' )
+		last_ep_number=$(echo ${selection_id} | sed -r 's/.*-episode-//' )
+		selection_id=$(echo ${selection_id} | sed -r 's/-episode-.[0-9]*//' )
 		;;
 esac
 
