@@ -4,6 +4,7 @@
 # video_player ( needs to be able to play urls )
 player_fn="mpv"
 
+
 prog="ani-cli"
 logfile="${XDG_CACHE_HOME:-$HOME/.cache}/ani-hsts"
 
@@ -65,7 +66,7 @@ search_eps () {
 }
 
 get_releases() {
-	# get anime name along with its id
+	# get anime name along with its id from the recent release list
 	search=$(printf '%s' "$1" | tr ' ' '-' )
 	titlepattern='<a href="/category/'
 
@@ -123,6 +124,62 @@ get_search_query () {
 # create history file
 [ -f "$logfile" ] || : > "$logfile"
 
+
+#####################
+## Recent Releases ##
+#####################
+
+download_release_images () {
+	search_results=$1
+	
+	# Downloads every image of the list using multi threading
+	count=1
+	while read anime_id; do
+
+		# Filters anime_id to remove the episode number if necessary
+		anime_id=$(echo ${anime_id} | sed -r 's/-episode-.[0-9]*//' )
+		
+		file_name=$anime_id".png"
+		img_link="https://gogocdn.net/cover/"${file_name}
+
+		if ! [ -f ./img/${file_name} ]; then
+			
+			curl --fail -s "${img_link}" -o ./img/${file_name} &
+
+		fi
+
+		count=$((count+1))
+	done <<-EOF
+	$search_results
+	EOF
+
+	# Waits until all images are downloaded
+	wait
+}
+
+display_cover_image() {
+
+	anime_id=$1
+	max_height=$2
+	full_max_height=47
+
+	# Filters anime_id to remove the episode number if necessary
+	filtered_anime_id=$(echo ${anime_id} | sed -r 's/-episode-.[0-9]*//' )
+
+	if [ -z $max_height ]; then
+		# Displays full cover image		
+		if [ -f ./img/${filtered_anime_id}".png" ]; then
+			tiv -h $full_max_height ./img/${filtered_anime_id}".png"
+		fi
+	else
+		# Displays small cover image
+		if [ -f ./img/${filtered_anime_id}".png" ]; then
+			tiv -h $max_height ./img/${filtered_anime_id}".png"
+			echo -e "" 
+		fi	
+	fi
+}
+
 #####################
 ## Anime selection ##
 #####################
@@ -141,6 +198,7 @@ anime_selection () {
 			menu_format_string=$menu_format_string_c2
 
 		printf "$menu_format_string" "$count" "$anime_id"
+		display_cover_image $anime_id 12
 		count=$((count+1))
 	done <<-EOF
 	$search_results
@@ -173,6 +231,9 @@ anime_selection () {
 	EOF
 }
 
+
+
+
 ##################
 ## Ep selection ##
 ##################
@@ -193,6 +254,8 @@ open_episode () {
 
 	# Cool effect way of clearing screen
 	printf '\x1B[2J\x1B[1;1H'
+
+	display_cover_image ${selection_id}
 	
 	if [ $episode -lt 1 ] || [ $episode -gt $last_ep_number ]; then
 		err "Episode out of range"
@@ -201,7 +264,8 @@ open_episode () {
 		printf "$c_reset"
 	fi
 
-	printf "Getting data for episode %d\n" $episode
+	#printf "Getting data for episode %d\n" $episode
+	echo -e ""
 
 	embedded_video_url=$(get_embedded_video_link "$anime_id" "$episode")
 	video_url=$(get_links "$embedded_video_url")
@@ -224,8 +288,16 @@ open_episode () {
 		sed -E "
 			s/^${selection_id}\t[0-9]+/${selection_id}\t$((episode+1))/
 		" "$logfile" > "${logfile}.new" && mv "${logfile}.new" "$logfile"
-
-		setsid -f $player_fn --http-header-fields="Referer: $embedded_video_url" "$video_url" >/dev/null 2>&1
+		pkill -x mpv
+		geometry=$(xrandr --current | sed -n 's/.* connected primary \([0-9]*\)x\([0-9]*\)+.*/\1x\2/p')
+		geo_w=$(echo $geometry | sed 's/x.*//')
+		geo_h=$(echo $geometry | sed 's/[^x]*x//')
+		
+		geo_w=$(echo $((geo_w / 2 - 100)))
+				
+		#echo "SIZE ::: "$geo_w"x"$geo_h
+		
+		setsid -f $player_fn --geometry=$geo_w"x"$geo_h --http-header-fields="Referer: $embedded_video_url" "$video_url" >/dev/null 2>&1
 	else
 		printf "Downloading episode $episode ...\n"
 		printf "%s\n" "$video_url"
@@ -281,6 +353,7 @@ case $scrape in
 		get_search_query "$*"
 		search_results=$(search_anime "$query")
 		[ -z "$search_results" ] && die "No search results found"
+		download_release_images "$search_results"
 		anime_selection "$search_results"
 		episode_selection
 		;;
@@ -294,6 +367,7 @@ case $scrape in
 		page=$r
 		search_results=$(get_releases "$page")
 		[ -z "$search_results" ] && die "There was a problem fetching the releases"
+		download_release_images "$search_results"
 		anime_selection "$search_results"
 		ep_choice_start=$(echo ${selection_id} | sed -r 's/.*-episode-//' )
 		last_ep_number=$(echo ${selection_id} | sed -r 's/.*-episode-//' )
