@@ -7,6 +7,9 @@ player_fn="mpv"
 
 prog="ani-cli"
 logfile="${XDG_CACHE_HOME:-$HOME/.cache}/ani-hsts"
+imgfolder="${XDG_CACHE_HOME:-$HOME/.cache}/ani-cli/img/"
+
+
 
 c_red="\033[1;31m"
 c_green="\033[1;32m"
@@ -124,6 +127,11 @@ get_search_query () {
 # create history file
 [ -f "$logfile" ] || : > "$logfile"
 
+# create images folder
+if [ ! -d "$imgfolder" ]; then
+  mkdir -p "$imgfolder";
+fi
+
 
 #####################
 ## Recent Releases ##
@@ -142,9 +150,9 @@ download_release_images () {
 		file_name=$anime_id".png"
 		img_link="https://gogocdn.net/cover/"${file_name}
 
-		if ! [ -f ./img/${file_name} ]; then
+		if ! [ -f ${imgfolder}${file_name} ]; then
 			
-			curl --fail -s "${img_link}" -o ./img/${file_name} &
+			curl --fail -s "${img_link}" -o ${imgfolder}${file_name} &
 
 		fi
 
@@ -168,13 +176,13 @@ display_cover_image() {
 
 	if [ -z $max_height ]; then
 		# Displays full cover image		
-		if [ -f ./img/${filtered_anime_id}".png" ]; then
-			tiv -h $full_max_height ./img/${filtered_anime_id}".png"
+		if [ -f ${imgfolder}${filtered_anime_id}".png" ]; then
+			tiv -h $full_max_height ${imgfolder}/${filtered_anime_id}".png"
 		fi
 	else
 		# Displays small cover image
-		if [ -f ./img/${filtered_anime_id}".png" ]; then
-			tiv -h $max_height ./img/${filtered_anime_id}".png"
+		if [ -f ${imgfolder}${filtered_anime_id}".png" ]; then
+			tiv -h $max_height ${imgfolder}${filtered_anime_id}".png"
 			echo -e "" 
 		fi	
 	fi
