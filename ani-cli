@@ -177,7 +177,7 @@ display_cover_image() {
 	if [ -z $max_height ]; then
 		# Displays full cover image		
 		if [ -f ${imgfolder}${filtered_anime_id}".png" ]; then
-			tiv -h $full_max_height ${imgfolder}/${filtered_anime_id}".png"
+			tiv -h $full_max_height ${imgfolder}${filtered_anime_id}".png"
 		fi
 	else
 		# Displays small cover image
